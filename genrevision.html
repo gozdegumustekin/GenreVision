@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GenreVision | AI Movie Poster Analysis</title>
+  <style>
+    :root {
+      --bg: #030508;
+      --bg-soft: #070b12;
+      --panel: rgba(12, 18, 27, 0.72);
+      --panel-strong: rgba(15, 24, 36, 0.88);
+      --border: rgba(118, 236, 255, 0.2);
+      --border-warm: rgba(255, 145, 77, 0.26);
+      --text: #f4f7fb;
+      --muted: #94a3b8;
+      --muted-2: #64748b;
+      --cyan: #35e6ff;
+      --teal: #19d4bd;
+      --orange: #ff934f;
+      --amber: #ffbd5a;
+      --violet: #b07cff;
+      --red: #ff4d6d;
+      --green: #63ffb6;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+      --radius-xl: 34px;
+      --radius-lg: 24px;
+      --radius-md: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 18%, rgba(53, 230, 255, 0.18), transparent 28%),
+        radial-gradient(circle at 82% 12%, rgba(255, 147, 79, 0.18), transparent 28%),
+        radial-gradient(circle at 56% 100%, rgba(176, 124, 255, 0.12), transparent 34%),
+        linear-gradient(135deg, #020305 0%, #06101a 48%, #030508 100%);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: radial-gradient(circle at center, black 0%, transparent 78%);
+      opacity: 0.55;
+      z-index: 0;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.045) 38%, transparent 42%),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.04), transparent 38%);
+      mix-blend-mode: screen;
+      opacity: 0.7;
+      z-index: 0;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.06;
+      z-index: 1;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .app {
+      position: relative;
+      z-index: 2;
+      width: min(1440px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 28px 0 46px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 14px 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      background: rgba(5, 10, 16, 0.58);
+      backdrop-filter: blur(22px);
+      box-shadow: 0 12px 50px rgba(0,0,0,0.38);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: max-content;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 15px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.32), transparent 28%),
+        linear-gradient(135deg, rgba(53,230,255,0.25), rgba(255,147,79,0.24));
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 0 32px rgba(53, 230, 255, 0.18);
+      position: relative;
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+      filter: drop-shadow(0 0 10px rgba(53,230,255,0.45));
+    }
+
+    .brand-name {
+      font-size: 1.08rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .brand-sub {
+      display: block;
+      margin-top: -2px;
+      color: var(--muted-2);
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.035);
+    }
+
+    .nav-links a {
+      color: #bac6d7;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 650;
+      padding: 10px 14px;
+      border-radius: 999px;
+      transition: 0.25s ease;
+    }
+
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: white;
+      background: rgba(255,255,255,0.08);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    .nav-action {
+      border: 0;
+      cursor: pointer;
+      color: #031014;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      padding: 13px 18px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--cyan), var(--orange));
+      box-shadow: 0 0 34px rgba(53,230,255,0.22), 0 0 28px rgba(255,147,79,0.18);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .nav-action:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 44px rgba(53,230,255,0.32), 0 0 36px rgba(255,147,79,0.24);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(390px, 0.72fr);
+      gap: 26px;
+      align-items: stretch;
+      margin-top: 44px;
+    }
+
+    .left-stage,
+    .result-panel {
+      min-height: 675px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: #c7f8ff;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 9px 13px;
+      border: 1px solid rgba(53,230,255,0.18);
+      border-radius: 999px;
+      background: rgba(53,230,255,0.055);
+      box-shadow: 0 0 26px rgba(53,230,255,0.08);
+    }
+
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px var(--green);
+    }
+
+    h1 {
+      max-width: 820px;
+      margin-top: 28px;
+      font-size: clamp(3.4rem, 7vw, 6.6rem);
+      line-height: 0.9;
+      letter-spacing: -0.075em;
+      font-weight: 950;
+      text-wrap: balance;
+    }
+
+    .gradient-text {
+      display: inline-block;
+      color: transparent;
+      background: linear-gradient(100deg, #ffffff 0%, #c8fbff 34%, #ffb16e 74%, #ffffff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      filter: drop-shadow(0 0 18px rgba(53,230,255,0.12));
+    }
+
+    .hero-copy {
+      max-width: 750px;
+      margin-top: 26px;
+      color: #aab6c8;
+      font-size: 1.08rem;
+      line-height: 1.8;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 28px 0 22px;
+    }
+
+    .metric-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .metric-card strong {
+      display: block;
+      font-size: 1.45rem;
+      letter-spacing: -0.05em;
+    }
+
+    .metric-card span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .workspace {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.025)),
+        rgba(8, 13, 20, 0.58);
+      border: 1px solid rgba(255,255,255,0.09);
+      backdrop-filter: blur(24px);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .workspace::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(53,230,255,0.2), transparent 30%, transparent 65%, rgba(255,147,79,0.22));
+      pointer-events: none;
+      mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+      mask-composite: exclude;
+      padding: 1px;
+    }
+
+    .dropzone {
+      position: relative;
+      min-height: 320px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border-radius: 28px;
+      padding: 34px 28px;
+      border: 1px dashed rgba(150, 244, 255, 0.35);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(53,230,255,0.12), transparent 34%),
+        radial-gradient(circle at 82% 80%, rgba(255,147,79,0.12), transparent 34%),
+        rgba(3, 8, 13, 0.62);
+      overflow: hidden;
+      transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .dropzone.dragover {
+      transform: translateY(-3px);
+      border-color: rgba(53,230,255,0.95);
+      box-shadow: 0 0 70px rgba(53,230,255,0.18), inset 0 0 50px rgba(53,230,255,0.08);
+    }
+
+    .dropzone::before,
+    .dropzone::after {
+      content: "";
+      position: absolute;
+      width: 70px;
+      height: 70px;
+      border-color: rgba(53,230,255,0.64);
+      pointer-events: none;
+      filter: drop-shadow(0 0 12px rgba(53,230,255,0.36));
+    }
+
+    .dropzone::before {
+      top: 20px;
+      left: 20px;
+      border-top: 2px solid;
+      border-left: 2px solid;
+      border-top-left-radius: 18px;
+    }
+
+    .dropzone::after {
+      right: 20px;
+      bottom: 20px;
+      border-right: 2px solid rgba(255,147,79,0.7);
+      border-bottom: 2px solid rgba(255,147,79,0.7);
+      border-bottom-right-radius: 18px;
+      filter: drop-shadow(0 0 12px rgba(255,147,79,0.32));
+    }
+
+    .scan-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(53,230,255,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(53,230,255,0.055) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.38;
+      transform: perspective(700px) rotateX(40deg) scale(1.18);
+      transform-origin: center;
+      pointer-events: none;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      height: 2px;
+      top: 0;
+      background: linear-gradient(90deg, transparent, var(--cyan), white, var(--orange), transparent);
+      box-shadow: 0 0 22px rgba(53,230,255,0.72), 0 0 42px rgba(255,147,79,0.24);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .dropzone.scanning .scan-line {
+      opacity: 1;
+      animation: scan 1.45s ease-in-out infinite;
+    }
+
+    @keyframes scan {
+      0% { transform: translateY(20px); opacity: 0; }
+      16% { opacity: 1; }
+      84% { opacity: 1; }
+      100% { transform: translateY(280px); opacity: 0; }
+    }
+
+    .upload-content {
+      position: relative;
+      z-index: 2;
+      max-width: 560px;
+    }
+
+    .upload-orb {
+      width: 86px;
+      height: 86px;
+      margin: 0 auto 22px;
+      border-radius: 28px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.35), transparent 24%),
+        linear-gradient(135deg, rgba(53,230,255,0.25), rgba(255,147,79,0.22));
+      border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: 0 0 56px rgba(53,230,255,0.20), inset 0 0 22px rgba(255,255,255,0.05);
+    }
+
+    .upload-orb svg {
+      width: 42px;
+      height: 42px;
+    }
+
+    .drop-title {
+      font-size: clamp(1.8rem, 3vw, 2.65rem);
+      line-height: 1;
+      letter-spacing: -0.055em;
+      font-weight: 920;
+    }
+
+    .drop-subtitle {
+      margin: 14px auto 24px;
+      color: #99a8bb;
+      line-height: 1.7;
+      max-width: 520px;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .url-input {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.08);
+      outline: none;
+      color: white;
+      background: rgba(255,255,255,0.055);
+      border-radius: 18px;
+      padding: 15px 16px;
+      font-size: 0.94rem;
+      transition: 0.2s ease;
+    }
+
+    .url-input:focus {
+      border-color: rgba(53,230,255,0.5);
+      box-shadow: 0 0 0 4px rgba(53,230,255,0.08);
+    }
+
+    .btn {
+      border: 0;
+      cursor: pointer;
+      border-radius: 18px;
+      padding: 15px 20px;
+      color: #041014;
+      background: linear-gradient(135deg, var(--cyan), var(--orange));
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 34px rgba(53,230,255,0.18), 0 0 24px rgba(255,147,79,0.12);
+      transition: transform 0.22s ease, filter 0.22s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.08);
+    }
+
+    .ghost-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: white;
+      background: rgba(255,255,255,0.07);
+      padding: 14px 18px;
+      border-radius: 18px;
+      cursor: pointer;
+      font-weight: 800;
+      transition: 0.22s ease;
+    }
+
+    .ghost-btn:hover {
+      border-color: rgba(53,230,255,0.38);
+      background: rgba(53,230,255,0.08);
+    }
+
+    .file-meta {
+      margin-top: 15px;
+      color: var(--muted-2);
+      font-size: 0.83rem;
+    }
+
+    .mini-flow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .flow-card {
+      position: relative;
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.075);
+      overflow: hidden;
+    }
+
+    .flow-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 0%, rgba(53,230,255,0.10), transparent 34%);
+      pointer-events: none;
+    }
+
+    .flow-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: rgba(53,230,255,0.08);
+      border: 1px solid rgba(53,230,255,0.13);
+      margin-bottom: 14px;
+    }
+
+    .flow-card strong {
+      display: block;
+      font-size: 0.98rem;
+      letter-spacing: -0.025em;
+    }
+
+    .flow-card p {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    .result-panel {
+      position: relative;
+      padding: 20px;
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.10), rgba(255,255,255,0.035)),
+        rgba(6, 11, 18, 0.72);
+      border: 1px solid rgba(255,255,255,0.10);
+      backdrop-filter: blur(26px);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+
+    .result-panel::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: linear-gradient(160deg, rgba(53,230,255,0.36), transparent 32%, transparent 62%, rgba(255,147,79,0.35));
+      pointer-events: none;
+      mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+      mask-composite: exclude;
+      padding: 1px;
+    }
+
+    .panel-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .panel-title small {
+      color: var(--muted-2);
+      font-size: 0.77rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .panel-title h2 {
+      margin-top: 4px;
+      font-size: 1.55rem;
+      letter-spacing: -0.05em;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(99,255,182,0.2);
+      background: rgba(99,255,182,0.07);
+      color: #caffdf;
+      font-size: 0.78rem;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .status i {
+      width: 8px;
+      height: 8px;
+      display: block;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px var(--green);
+    }
+
+    .poster-preview-wrap {
+      display: grid;
+      grid-template-columns: 155px minmax(0, 1fr);
+      gap: 16px;
+      align-items: stretch;
+      margin-top: 22px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .poster-preview {
+      position: relative;
+      min-height: 224px;
+      border-radius: 23px;
+      overflow: hidden;
+      background:
+        linear-gradient(145deg, rgba(53,230,255,0.18), rgba(255,147,79,0.13)),
+        #070b12;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 34px rgba(53,230,255,0.10);
+    }
+
+    .poster-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .poster-preview.has-image img {
+      display: block;
+    }
+
+    .poster-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 18px;
+      color: rgba(255,255,255,0.82);
+    }
+
+    .poster-preview.has-image .poster-placeholder {
+      display: none;
+    }
+
+    .poster-placeholder strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 1.05rem;
+      letter-spacing: -0.03em;
+    }
+
+    .poster-placeholder span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .confidence-card {
+      padding: 17px;
+      border-radius: 23px;
+      background: rgba(255,255,255,0.047);
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .confidence-card p {
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.6;
+    }
+
+    .score-ring {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      margin: 12px auto 8px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        conic-gradient(var(--cyan) calc(var(--score) * 1%), rgba(255,255,255,0.08) 0),
+        radial-gradient(circle, rgba(3,5,8,0.92) 58%, transparent 59%);
+      box-shadow: 0 0 28px rgba(53,230,255,0.15);
+    }
+
+    .score-ring::before {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border-radius: 50%;
+      background: rgba(5, 10, 16, 0.96);
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .score-ring span {
+      position: relative;
+      z-index: 1;
+      font-size: 1.45rem;
+      font-weight: 950;
+      letter-spacing: -0.06em;
+    }
+
+    .section-label {
+      margin: 24px 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .section-label h3 {
+      font-size: 1rem;
+      letter-spacing: -0.025em;
+    }
+
+    .section-label span {
+      color: var(--muted-2);
+      font-size: 0.8rem;
+      font-weight: 750;
+    }
+
+    .genre-list {
+      display: grid;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .genre-row {
+      padding: 13px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.044);
+      border: 1px solid rgba(255,255,255,0.075);
+    }
+
+    .genre-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .genre-name {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 850;
+      font-size: 0.91rem;
+      letter-spacing: -0.015em;
+    }
+
+    .genre-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--bar-color);
+      box-shadow: 0 0 14px var(--bar-color);
+    }
+
+    .genre-value {
+      color: #e7eef9;
+      font-weight: 850;
+      font-size: 0.86rem;
+    }
+
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--bar-color), rgba(255,255,255,0.85));
+      box-shadow: 0 0 18px var(--bar-color);
+      transition: width 1.05s cubic-bezier(0.2, 0.9, 0.2, 1);
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tag {
+      color: #cfe8ee;
+      font-size: 0.79rem;
+      font-weight: 760;
+      padding: 9px 11px;
+      border-radius: 999px;
+      background: rgba(53,230,255,0.075);
+      border: 1px solid rgba(53,230,255,0.13);
+    }
+
+    .insight {
+      margin-top: 16px;
+      padding: 17px;
+      border-radius: 22px;
+      border: 1px solid rgba(255,147,79,0.16);
+      background:
+        radial-gradient(circle at 12% 20%, rgba(255,147,79,0.13), transparent 35%),
+        rgba(255,255,255,0.045);
+      position: relative;
+      z-index: 1;
+    }
+
+    .insight strong {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.92rem;
+      letter-spacing: -0.02em;
+    }
+
+    .insight p {
+      margin-top: 10px;
+      color: #aab6c8;
+      font-size: 0.88rem;
+      line-height: 1.65;
+    }
+
+    .api-note {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.035);
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.6;
+      position: relative;
+      z-index: 1;
+    }
+
+    .api-note code {
+      color: #dbfbff;
+      background: rgba(53,230,255,0.08);
+      border: 1px solid rgba(53,230,255,0.10);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .features {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .feature-card {
+      position: relative;
+      padding: 22px;
+      min-height: 180px;
+      border-radius: 26px;
+      border: 1px solid rgba(255,255,255,0.085);
+      background: rgba(255,255,255,0.042);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(53,230,255,0.12), transparent 35%);
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    .feature-card:nth-child(even)::before {
+      background: radial-gradient(circle at top left, rgba(255,147,79,0.12), transparent 35%);
+    }
+
+    .feature-card .flow-icon,
+    .feature-card h3,
+    .feature-card p {
+      position: relative;
+      z-index: 1;
+    }
+
+    .feature-card h3 {
+      margin-top: 16px;
+      font-size: 1.08rem;
+      letter-spacing: -0.035em;
+    }
+
+    .feature-card p {
+      margin-top: 10px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 0.88rem;
+    }
+
+    .hidden-input {
+      display: none;
+    }
+
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      max-width: 360px;
+      padding: 15px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(53,230,255,0.18);
+      background: rgba(5, 10, 16, 0.88);
+      backdrop-filter: blur(20px);
+      color: #dffaff;
+      box-shadow: 0 20px 70px rgba(0,0,0,0.52);
+      transform: translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.28s ease;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1120px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .left-stage,
+      .result-panel {
+        min-height: auto;
+      }
+
+      .features {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        width: min(100% - 26px, 1440px);
+        padding-top: 16px;
+      }
+
+      .nav {
+        align-items: flex-start;
+        border-radius: 26px;
+        flex-direction: column;
+      }
+
+      .nav-links {
+        width: 100%;
+        overflow-x: auto;
+      }
+
+      .nav-action {
+        width: 100%;
+      }
+
+      .hero {
+        margin-top: 28px;
+      }
+
+      .metrics,
+      .mini-flow,
+      .features,
+      .poster-preview-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: clamp(3rem, 18vw, 4.3rem);
+      }
+
+      .input-row {
+        grid-template-columns: 1fr;
+      }
+
+      .poster-preview {
+        min-height: 330px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="noise"></div>
+
+  <main class="app">
+    <nav class="nav" aria-label="Ana navigasyon">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M3.5 12s3.1-5.5 8.5-5.5S20.5 12 20.5 12 17.4 17.5 12 17.5 3.5 12 3.5 12Z" stroke="white" stroke-width="1.7" />
+            <path d="M12 14.8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Z" stroke="white" stroke-width="1.7" />
+            <path d="M19 4.5v3M20.5 6h-3M5 17v2.5M6.25 18.25h-2.5" stroke="#35e6ff" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">GenreVision</div>
+          <span class="brand-sub">Poster Intelligence</span>
+        </div>
+      </div>
+
+      <div class="nav-links">
+        <a class="active" href="#analyze">Analyze</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#model">Model</a>
+        <a href="#results">Reports</a>
+      </div>
+
+      <button class="nav-action" onclick="document.getElementById('posterFile').click()">Start Analysis</button>
+    </nav>
+
+    <section class="hero" id="analyze">
+      <div class="left-stage">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> AI powered movie poster analysis</div>
+
+        <h1>
+          Decode the genre behind <span class="gradient-text">every poster.</span>
+        </h1>
+
+        <p class="hero-copy">
+          GenreVision, bir film afişinin renklerini, kompozisyonunu, görsel dokusunu ve sinematik sinyallerini analiz ederek filmin hangi türlere ait olduğunu saniyeler içinde tahmin eden görsel zeka platformudur.
+        </p>
+
+        <div class="metrics">
+          <div class="metric-card">
+            <strong>ResNet18</strong>
+            <span>Derin öğrenme modeli</span>
+          </div>
+          <div class="metric-card">
+            <strong>19 tür</strong>
+            <span>Çoklu genre tahmini</span>
+          </div>
+          <div class="metric-card">
+            <strong>Cloud API</strong>
+            <span>Railway + FastAPI</span>
+          </div>
+        </div>
+
+        <div class="workspace">
+          <div class="dropzone" id="dropzone">
+            <div class="scan-grid"></div>
+            <div class="scan-line"></div>
+
+            <div class="upload-content">
+              <div class="upload-orb" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 15.5V4.5" stroke="white" stroke-width="1.8" stroke-linecap="round" />
+                  <path d="M7.8 8.7 12 4.5l4.2 4.2" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M5 14.5v2.7A2.8 2.8 0 0 0 7.8 20h8.4a2.8 2.8 0 0 0 2.8-2.8v-2.7" stroke="#35e6ff" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </div>
+
+              <div class="drop-title">Afişi laboratuvara bırak.</div>
+              <p class="drop-subtitle">
+                Görseli sürükle-bırak, dosya seç veya afiş URL’si yapıştır. Sistem afişi okuyup tür olasılıklarını sinematik bir rapor olarak gösterir.
+              </p>
+
+              <button class="ghost-btn" onclick="document.getElementById('posterFile').click()">
+                <span>Dosya Seç</span>
+              </button>
+              <input class="hidden-input" id="posterFile" type="file" accept="image/png,image/jpeg,image/webp" />
+
+              <div class="input-row">
+                <input class="url-input" id="posterUrl" type="url" placeholder="Afiş görsel linki yapıştır: https://..." />
+                <button class="btn" id="analyzeUrlBtn">Analiz Et</button>
+              </div>
+
+              <div class="file-meta" id="fileMeta">JPG, PNG, WEBP desteklenir. Önerilen maksimum dosya: 20MB.</div>
+            </div>
+          </div>
+
+          <div class="mini-flow" id="workflow">
+            <div class="flow-card">
+              <div class="flow-icon">🎞️</div>
+              <strong>1. Afişi alır</strong>
+              <p>Kullanıcının yüklediği dosya veya URL, analiz akışına gönderilir.</p>
+            </div>
+            <div class="flow-card">
+              <div class="flow-icon">🧠</div>
+              <strong>2. Model okur</strong>
+              <p>ResNet18 afişteki görsel desenleri ve tür sinyallerini inceler.</p>
+            </div>
+            <div class="flow-card">
+              <div class="flow-icon">📊</div>
+              <strong>3. Sonuç üretir</strong>
+              <p>19 film türü için olasılıklar, güven skoru ve görsel yorum döner.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="result-panel" id="results">
+        <div class="panel-top">
+          <div class="panel-title">
+            <small>Live Intelligence</small>
+            <h2>AI Genre Prediction</h2>
+          </div>
+          <div class="status"><i></i><span id="statusText">Analysis Ready</span></div>
+        </div>
+
+        <div class="poster-preview-wrap">
+          <div class="poster-preview" id="posterPreview">
+            <img id="previewImage" alt="Analiz edilen film afişi önizlemesi" />
+            <div class="poster-placeholder">
+              <div>
+                <div style="font-size: 2.4rem;">🎬</div>
+                <strong>Poster Preview</strong>
+                <span>Analiz edilecek afiş burada sinematik çerçeve içinde görünür.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="confidence-card">
+            <div>
+              <p>Genel güven skoru, modelin en güçlü tür tahminine göre hesaplanır.</p>
+              <div class="score-ring" id="scoreRing" style="--score: 92">
+                <span id="confidenceText">92%</span>
+              </div>
+            </div>
+            <p><strong style="color:white;">Top Signal:</strong> <span id="topSignal">Sci-Fi / Thriller</span></p>
+          </div>
+        </div>
+
+        <div class="section-label">
+          <h3>Genre Probability Matrix</h3>
+          <span id="updatedText">Mock preview</span>
+        </div>
+
+        <div class="genre-list" id="genreList"></div>
+
+        <div class="section-label">
+          <h3>Visual Signals Detected</h3>
+          <span>Poster DNA</span>
+        </div>
+
+        <div class="tags" id="tags">
+          <span class="tag">Neon Lighting</span>
+          <span class="tag">Dark Atmosphere</span>
+          <span class="tag">High Contrast</span>
+          <span class="tag">Dramatic Pose</span>
+          <span class="tag">Futuristic Texture</span>
+        </div>
+
+        <div class="insight">
+          <strong>✨ AI Insight</strong>
+          <p id="insightText">
+            Afiş, koyu atmosferi, yüksek kontrastı ve soğuk neon ışık diliyle bilim kurgu / gerilim türlerine yakın bir görsel kimlik gösteriyor.
+          </p>
+        </div>
+
+        <div class="api-note" id="model">
+          Backend bağlamak için JavaScript içindeki <code>API_URL</code> değerini Railway FastAPI endpoint’inle değiştir. API kapalıysa arayüz otomatik olarak demo tahminleriyle çalışır.
+        </div>
+      </aside>
+    </section>
+
+    <section class="features">
+      <article class="feature-card">
+        <div class="flow-icon">🖼️</div>
+        <h3>Poster Intelligence</h3>
+        <p>Afişteki renk, kadraj, karakter duruşu ve görsel tonu anlamlandıran akıllı analiz deneyimi.</p>
+      </article>
+      <article class="feature-card">
+        <div class="flow-icon">☁️</div>
+        <h3>Cloud Ready</h3>
+        <p>Cloudflare R2 depolama ve Railway üzerindeki FastAPI servisiyle canlı kullanıma hazır yapı.</p>
+      </article>
+      <article class="feature-card">
+        <div class="flow-icon">⚡</div>
+        <h3>Fast Prediction</h3>
+        <p>Kullanıcı tek tıkla afişi gönderir; model saniyeler içinde tür olasılıklarını döndürür.</p>
+      </article>
+      <article class="feature-card">
+        <div class="flow-icon">🎭</div>
+        <h3>19 Genre Output</h3>
+        <p>Aksiyon, Dram, Korku, Animasyon, Romantik, Savaş ve daha fazla tür için çoklu tahmin.</p>
+      </article>
+    </section>
+  </main>
+
+  <div class="toast" id="toast">Analiz başlatıldı.</div>
+
+  <script>
+    const API_URL = "https://genrevision-production.up.railway.app/predict";
+
+    const defaultGenres = [
+      { name: "Sci-Fi", value: 92, color: "#35e6ff" },
+      { name: "Thriller", value: 76, color: "#b07cff" },
+      { name: "Mystery", value: 64, color: "#19d4bd" },
+      { name: "Drama", value: 48, color: "#ff934f" },
+      { name: "Action", value: 37, color: "#ff4d6d" }
+    ];
+
+    const genrePalettes = [
+      [
+        { name: "Drama", value: 84, color: "#ff934f" },
+        { name: "Romance", value: 72, color: "#ff7ab6" },
+        { name: "Mystery", value: 55, color: "#b07cff" },
+        { name: "Comedy", value: 34, color: "#ffbd5a" },
+        { name: "War", value: 28, color: "#94a3b8" }
+      ],
+      [
+        { name: "Horror", value: 89, color: "#ff4d6d" },
+        { name: "Thriller", value: 81, color: "#b07cff" },
+        { name: "Mystery", value: 62, color: "#35e6ff" },
+        { name: "Drama", value: 43, color: "#ff934f" },
+        { name: "Crime", value: 35, color: "#19d4bd" }
+      ],
+      [
+        { name: "Animation", value: 91, color: "#ffbd5a" },
+        { name: "Adventure", value: 78, color: "#35e6ff" },
+        { name: "Family", value: 71, color: "#63ffb6" },
+        { name: "Comedy", value: 58, color: "#ff934f" },
+        { name: "Fantasy", value: 46, color: "#b07cff" }
+      ],
+      defaultGenres
+    ];
+
+    const dropzone = document.getElementById("dropzone");
+    const posterFile = document.getElementById("posterFile");
+    const posterUrl = document.getElementById("posterUrl");
+    const analyzeUrlBtn = document.getElementById("analyzeUrlBtn");
+    const previewImage = document.getElementById("previewImage");
+    const posterPreview = document.getElementById("posterPreview");
+    const fileMeta = document.getElementById("fileMeta");
+    const genreList = document.getElementById("genreList");
+    const statusText = document.getElementById("statusText");
+    const updatedText = document.getElementById("updatedText");
+    const confidenceText = document.getElementById("confidenceText");
+    const scoreRing = document.getElementById("scoreRing");
+    const topSignal = document.getElementById("topSignal");
+    const insightText = document.getElementById("insightText");
+    const toast = document.getElementById("toast");
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    function renderGenres(genres) {
+      genreList.innerHTML = "";
+      genres.forEach((genre, index) => {
+        const row = document.createElement("div");
+        row.className = "genre-row";
+        row.style.setProperty("--bar-color", genre.color);
+        row.innerHTML = `
+          <div class="genre-head">
+            <div class="genre-name"><span class="genre-dot"></span>${genre.name}</div>
+            <div class="genre-value">${genre.value}%</div>
+          </div>
+          <div class="bar"><div class="bar-fill"></div></div>
+        `;
+        genreList.appendChild(row);
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            row.querySelector(".bar-fill").style.width = genre.value + "%";
+          }, 120 + index * 90);
+        });
+      });
+
+      const top = genres[0];
+      confidenceText.textContent = top.value + "%";
+      scoreRing.style.setProperty("--score", top.value);
+      topSignal.textContent = genres.slice(0, 2).map(g => g.name).join(" / ");
+    }
+
+    function setPreviewFromUrl(url) {
+      previewImage.src = url;
+      posterPreview.classList.add("has-image");
+    }
+
+    function setPreviewFromFile(file) {
+      const reader = new FileReader();
+      reader.onload = event => setPreviewFromUrl(event.target.result);
+      reader.readAsDataURL(file);
+      fileMeta.textContent = `${file.name} seçildi. ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+    }
+
+    function normalizeApiResponse(data) {
+      // Beklenen örnek API cevapları:
+      // 1) { predictions: [{ label: "Drama", score: 0.82 }] }
+      // 2) { genres: { Drama: 0.82, War: 0.30 } }
+      // 3) { Drama: 0.82, War: 0.30 }
+
+      const colors = ["#35e6ff", "#b07cff", "#19d4bd", "#ff934f", "#ff4d6d", "#63ffb6", "#ffbd5a"];
+      let items = [];
+
+      if (Array.isArray(data?.predictions)) {
+        items = data.predictions.map(item => ({
+          name: item.label || item.genre || item.name,
+          value: Math.round((item.score > 1 ? item.score : item.score * 100))
+        }));
+      } else if (data?.genres && typeof data.genres === "object") {
+        items = Object.entries(data.genres).map(([name, score]) => ({
+          name,
+          value: Math.round(score > 1 ? score : score * 100)
+        }));
+      } else if (data && typeof data === "object") {
+        items = Object.entries(data)
+          .filter(([, value]) => typeof value === "number")
+          .map(([name, score]) => ({
+            name,
+            value: Math.round(score > 1 ? score : score * 100)
+          }));
+      }
+
+      return items
+        .filter(item => item.name && Number.isFinite(item.value))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5)
+        .map((item, index) => ({ ...item, color: colors[index % colors.length] }));
+    }
+
+    async function callApiWithFile(file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(API_URL, { method: "POST", body: formData });
+      if (!response.ok) throw new Error("API response error");
+      return response.json();
+    }
+
+    async function callApiWithUrl(url) {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: url })
+      });
+      if (!response.ok) throw new Error("API response error");
+      return response.json();
+    }
+
+    async function runAnalysis({ file, url } = {}) {
+      statusText.textContent = "Scanning Poster";
+      updatedText.textContent = "Analyzing pixels...";
+      dropzone.classList.add("scanning");
+      showToast("GenreVision afişi tarıyor...");
+
+      try {
+        let genres;
+
+        if (API_URL) {
+          const data = file ? await callApiWithFile(file) : await callApiWithUrl(url);
+          genres = normalizeApiResponse(data);
+          if (!genres.length) throw new Error("API formatı beklenen sonuçları içermiyor.");
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 1450));
+          genres = genrePalettes[Math.floor(Math.random() * genrePalettes.length)];
+        }
+
+        renderGenres(genres);
+        statusText.textContent = "Analysis Complete";
+        updatedText.textContent = new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+        insightText.textContent = `${genres[0].name} türü güçlü bir görsel sinyal veriyor. İkincil tahmin olan ${genres[1]?.name || "Drama"}, afişin renk dili ve kompozisyon yoğunluğu ile destekleniyor.`;
+        showToast("Analiz tamamlandı. Tür olasılıkları güncellendi.");
+      } catch (error) {
+        console.error(error);
+        const fallback = genrePalettes[Math.floor(Math.random() * genrePalettes.length)];
+        renderGenres(fallback);
+        statusText.textContent = "Demo Result";
+        updatedText.textContent = "API unavailable";
+        showToast("API yanıt vermedi; demo sonuç gösterildi.");
+      } finally {
+        setTimeout(() => dropzone.classList.remove("scanning"), 500);
+      }
+    }
+
+    posterFile.addEventListener("change", event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setPreviewFromFile(file);
+      runAnalysis({ file });
+    });
+
+    analyzeUrlBtn.addEventListener("click", () => {
+      const url = posterUrl.value.trim();
+      if (!url) {
+        showToast("Önce bir afiş görsel linki yapıştır.");
+        posterUrl.focus();
+        return;
+      }
+      setPreviewFromUrl(url);
+      fileMeta.textContent = "URL üzerinden afiş önizlemesi alındı.";
+      runAnalysis({ url });
+    });
+
+    ["dragenter", "dragover"].forEach(eventName => {
+      dropzone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+      dropzone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropzone.classList.remove("dragover");
+      });
+    });
+
+    dropzone.addEventListener("drop", event => {
+      const file = event.dataTransfer.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        showToast("Lütfen JPG, PNG veya WEBP formatında bir görsel yükle.");
+        return;
+      }
+      setPreviewFromFile(file);
+      runAnalysis({ file });
+    });
+
+    renderGenres(defaultGenres);
+  </script>
+</body>
+</html>

@@ -6,8 +6,16 @@ from torchvision import models, transforms
 from PIL import Image
 import requests
 from io import BytesIO
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="GenreVision API", description="Film afişlerinden tür tahmini yapan yapay zeka servisi")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Tüm web sitelerinden gelen isteklere izin ver
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Veri modelleri
 class PredictionRequest(BaseModel):
