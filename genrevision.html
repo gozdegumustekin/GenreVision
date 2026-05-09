@@ -1099,7 +1099,7 @@
 
               <div class="drop-title">Afişi laboratuvara bırak.</div>
               <p class="drop-subtitle">
-                Görseli sürükle-bırak, dosya seç veya afiş URL’si yapıştır. Sistem afişi okuyup tür olasılıklarını sinematik bir rapor olarak gösterir.
+                Görseli sürükle-bırak, dosya seç veya afiş URL'si yapıştır. Sistem afişi okuyup tür olasılıklarını sinematik bir rapor olarak gösterir.
               </p>
 
               <button class="ghost-btn" onclick="document.getElementById('posterFile').click()">
@@ -1196,7 +1196,7 @@
         </div>
 
         <div class="api-note" id="model">
-          Backend bağlamak için JavaScript içindeki <code>API_URL</code> değerini Railway FastAPI endpoint’inle değiştir. API kapalıysa arayüz otomatik olarak demo tahminleriyle çalışır.
+          Backend bağlamak için JavaScript içindeki <code>API_URL</code> değerini Railway FastAPI endpoint'inle değiştir. API kapalıysa arayüz otomatik olarak demo tahminleriyle çalışır.
         </div>
       </aside>
     </section>
@@ -1228,7 +1228,10 @@
   <div class="toast" id="toast">Analiz başlatıldı.</div>
 
   <script>
-    const API_URL = "https://genrevision-production.up.railway.app/predict";
+    // Backend endpoint'leri
+    const API_BASE = "https://genrevision-production.up.railway.app";
+    const API_URL = API_BASE + "/predict";          // URL bazlı tahmin (JSON)
+    const API_FILE_URL = API_BASE + "/predict_file"; // Dosya yükleme tahmini (multipart)
 
     const defaultGenres = [
       { name: "Sci-Fi", value: 92, color: "#35e6ff" },
@@ -1325,32 +1328,30 @@
     }
 
     function normalizeApiResponse(data) {
-      // Beklenen örnek API cevapları:
-      // 1) { predictions: [{ label: "Drama", score: 0.82 }] }
-      // 2) { genres: { Drama: 0.82, War: 0.30 } }
-      // 3) { Drama: 0.82, War: 0.30 }
-
+      // Backend cevap formatı: { turler: {...}, tum_skorlar: {...}, top_5: {...} }
+      // Frontend bar listesi için top_5'i kullan (her zaman 5 öğe içeriyor).
+      // Eğer top_5 yoksa turler veya tum_skorlar'a düş.
       const colors = ["#35e6ff", "#b07cff", "#19d4bd", "#ff934f", "#ff4d6d", "#63ffb6", "#ffbd5a"];
-      let items = [];
 
-      if (Array.isArray(data?.predictions)) {
-        items = data.predictions.map(item => ({
-          name: item.label || item.genre || item.name,
-          value: Math.round((item.score > 1 ? item.score : item.score * 100))
-        }));
-      } else if (data?.genres && typeof data.genres === "object") {
-        items = Object.entries(data.genres).map(([name, score]) => ({
+      let source = null;
+      if (data?.top_5 && Object.keys(data.top_5).length > 0) {
+        source = data.top_5;
+      } else if (data?.turler && Object.keys(data.turler).length > 0) {
+        source = data.turler;
+      } else if (data?.tum_skorlar && Object.keys(data.tum_skorlar).length > 0) {
+        source = data.tum_skorlar;
+      } else if (data && typeof data === "object") {
+        source = data;
+      }
+
+      if (!source) return [];
+
+      const items = Object.entries(source)
+        .filter(([, value]) => typeof value === "number")
+        .map(([name, score]) => ({
           name,
           value: Math.round(score > 1 ? score : score * 100)
         }));
-      } else if (data && typeof data === "object") {
-        items = Object.entries(data)
-          .filter(([, value]) => typeof value === "number")
-          .map(([name, score]) => ({
-            name,
-            value: Math.round(score > 1 ? score : score * 100)
-          }));
-      }
 
       return items
         .filter(item => item.name && Number.isFinite(item.value))
@@ -1360,20 +1361,31 @@
     }
 
     async function callApiWithFile(file) {
+      // Dosya yükleme: /predict_file endpoint'ine multipart/form-data
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(API_URL, { method: "POST", body: formData });
-      if (!response.ok) throw new Error("API response error");
+      const response = await fetch(API_FILE_URL, {
+        method: "POST",
+        body: formData
+      });
+      if (!response.ok) {
+        const errText = await response.text().catch(() => response.statusText);
+        throw new Error(`API ${response.status}: ${errText}`);
+      }
       return response.json();
     }
 
     async function callApiWithUrl(url) {
+      // URL bazlı: /predict endpoint'ine JSON
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_url: url })
+        body: JSON.stringify({ url: url })
       });
-      if (!response.ok) throw new Error("API response error");
+      if (!response.ok) {
+        const errText = await response.text().catch(() => response.statusText);
+        throw new Error(`API ${response.status}: ${errText}`);
+      }
       return response.json();
     }
 
@@ -1384,15 +1396,11 @@
       showToast("GenreVision afişi tarıyor...");
 
       try {
-        let genres;
+        const data = file ? await callApiWithFile(file) : await callApiWithUrl(url);
+        const genres = normalizeApiResponse(data);
 
-        if (API_URL) {
-          const data = file ? await callApiWithFile(file) : await callApiWithUrl(url);
-          genres = normalizeApiResponse(data);
-          if (!genres.length) throw new Error("API formatı beklenen sonuçları içermiyor.");
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 1450));
-          genres = genrePalettes[Math.floor(Math.random() * genrePalettes.length)];
+        if (!genres.length) {
+          throw new Error("API yanıtı geçersiz format döndürdü: " + JSON.stringify(data).slice(0, 200));
         }
 
         renderGenres(genres);
@@ -1401,12 +1409,15 @@
         insightText.textContent = `${genres[0].name} türü güçlü bir görsel sinyal veriyor. İkincil tahmin olan ${genres[1]?.name || "Drama"}, afişin renk dili ve kompozisyon yoğunluğu ile destekleniyor.`;
         showToast("Analiz tamamlandı. Tür olasılıkları güncellendi.");
       } catch (error) {
-        console.error(error);
+        // Detayli hata logu (F12 console'da görünür) — debug için
+        console.error("[GenreVision] API çağrısı başarısız:", error);
+
+        // Kullanıcıya demo göster
         const fallback = genrePalettes[Math.floor(Math.random() * genrePalettes.length)];
         renderGenres(fallback);
         statusText.textContent = "Demo Result";
         updatedText.textContent = "API unavailable";
-        showToast("API yanıt vermedi; demo sonuç gösterildi.");
+        showToast("API yanıt vermedi; demo sonuç gösterildi. (Console'da hata detayı var)");
       } finally {
         setTimeout(() => dropzone.classList.remove("scanning"), 500);
       }
