@@ -10,3 +10,4 @@ torch==2.1.2+cpu
 torchvision==0.16.2+cpu
 numpy==1.26.4
 boto3==1.34.0
+python-multipart==0.0.6
